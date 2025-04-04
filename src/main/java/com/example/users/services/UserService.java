@@ -1,6 +1,10 @@
 package com.example.users.services;
+import com.example.auth.service.TokenService;
+import com.example.auth.dto.AuthDto;
 import com.example.users.dao.UserDao;
 import com.example.users.dto.CreateUserDto;
+import com.example.users.dto.LoginDto;
+import com.example.users.dto.UpdateDto;
 import com.example.users.mapper.UserMapper;
 import com.example.users.dto.UserDetail;
 import com.example.users.model.User;
@@ -48,6 +52,49 @@ public class UserService {
         if (user == null) {
             throw new NotFoundException("User not found");
         }
+        return userMapper.toDTO(user);
+    }
+
+    public AuthDto authenticate(LoginDto loginDto) {
+        User user = userDao.findByUsername(loginDto.getUsername());
+
+        if (user == null || !BcryptUtil.matches(loginDto.getPassword(), user.getPassword())) {
+            throw new WebApplicationException("Invalid username or password", 401);
+        }
+
+        try {
+            String token = TokenService.generateToken(
+                    user.getUsername(),
+                    user.getId(),
+                    user.getRole()
+            );
+
+            AuthDto auth = new AuthDto();
+            auth.setToken(token);
+            auth.setUser(userMapper.toDTO(user));
+            return auth;
+        } catch (Exception e) {
+            throw new WebApplicationException("Token generation failed", 500);
+        }
+    }
+
+    public UserDetail update(Long id, UpdateDto dto){
+        User user = userDao.findById(id);
+        if (user == null) {
+            throw new NotFoundException("User not found");
+        }
+
+        if (dto.getUsername() != null) {
+            user.setUsername(dto.getUsername());
+        }
+        if (dto.getPassword() != null) {
+            user.setPassword(BcryptUtil.bcryptHash(dto.getPassword()));
+        }
+        if (dto.getEmail() != null) {
+            user.setEmail(dto.getEmail());
+        }
+        userDao.persist(user);
+
         return userMapper.toDTO(user);
     }
 }

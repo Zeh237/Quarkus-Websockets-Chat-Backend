@@ -1,12 +1,12 @@
 package com.example.users.model;
-import jakarta.persistence.*;
 import io.quarkus.hibernate.orm.panache.PanacheEntity;
+import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
+import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Email;
-import org.hibernate.validator.constraints.UniqueElements;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
@@ -17,7 +17,12 @@ import org.hibernate.validator.constraints.UniqueElements;
             @UniqueConstraint(columnNames = "email")
     })
 
-public class User extends PanacheEntity{
+public class User extends PanacheEntityBase {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
     @NotBlank
     @Size(min = 3, max = 50)
     private String username;
