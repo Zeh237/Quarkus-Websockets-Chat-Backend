@@ -3,8 +3,6 @@ package com.example.users.dao;
 import com.example.users.model.User;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
 
 @ApplicationScoped
 public class UserDao implements PanacheRepository<User> {
