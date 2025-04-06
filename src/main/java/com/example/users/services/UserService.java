@@ -18,6 +18,8 @@ import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
 
+import java.time.LocalDateTime;
+
 
 @ApplicationScoped
 public class UserService {
@@ -27,6 +29,9 @@ public class UserService {
 
     @Inject
     private UserMapper userMapper;
+
+    @Inject
+    private WebSocketService webSocketService;
 
     @Transactional
     public UserDetail createUser(CreateUserDto dto) {
@@ -96,5 +101,23 @@ public class UserService {
         userDao.persist(user);
 
         return userMapper.toDTO(user);
+    }
+
+    public String getLastSeen(Long id) {
+        User user = userDao.findById(id);
+        if (user == null) {
+            return "User not found";
+        }
+
+        if (webSocketService.isUserOnline(id)) {
+            return "Online";
+        }
+
+        LocalDateTime lastSeen = user.getLastSeen();
+        if (lastSeen == null) {
+            return "Long time ago";
+        }
+
+        return lastSeen.toString();
     }
 }

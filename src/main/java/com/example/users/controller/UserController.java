@@ -12,6 +12,8 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
+import java.util.Map;
+
 @Path("/users")
 public class UserController {
 
@@ -49,6 +51,13 @@ public class UserController {
         }
         UserDetail userDetail = userService.update(id, dto);
         return Response.ok(userDetail).build();
+    }
+
+    @GET
+    @Path("status/{id}")
+    @RolesAllowed({"USER", "ADMIN"})
+    public Response lastSeen(@PathParam("id") Long id) {
+        return Response.ok(Map.of("lastSeen", userService.getLastSeen(id))).build();
     }
 
 }

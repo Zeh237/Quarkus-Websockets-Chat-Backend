@@ -6,6 +6,10 @@ import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import jakarta.validation.constraints.Email;
+import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.UpdateTimestamp;
+
+import java.time.LocalDateTime;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
@@ -36,6 +40,17 @@ public class User extends PanacheEntityBase {
 
     @Enumerated(EnumType.STRING)
     private UserRole role;
+
+    @CreationTimestamp
+    @Column(name = "created_at")
+    private LocalDateTime createdAt;
+
+    @UpdateTimestamp
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    @Column(name = "last_seen")
+    private LocalDateTime lastSeen;
 
     public User() {
         this.role = UserRole.USER;
