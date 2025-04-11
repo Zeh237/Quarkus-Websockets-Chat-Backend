@@ -5,6 +5,7 @@ import com.example.chat.dao.MessageDao;
 import com.example.chat.dto.MessageDto;
 import com.example.users.dao.UserDao;
 import com.example.users.model.User;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.websocket.*;
@@ -30,6 +31,8 @@ public class WebsocketService {
 
     @Inject
     private ChatService chatService;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     Map<String, Session> sessions = new ConcurrentHashMap<>();
 
@@ -70,34 +73,35 @@ public class WebsocketService {
         broadcastToUser(user.getId(), "User " + user.getUsername() + " has connected.");
     }
 
-//    @OnMessage
-//    public void sendMessage(MessageDto messageDto, Session session) {
-//        User sender = userDao.findById(messageDto.getSenderId());
-//        if (sender == null) {
-//            try {
-//                session.close(new CloseReason(CloseReason.CloseCodes.CANNOT_ACCEPT, "User not found"));
-//            } catch (Exception e) {
-//                throw new RuntimeException(e.getMessage());
-//            }
-//            return;
-//        }
-//        try {
-//            boolean userOnline = sessions.values().stream()
-//                    .anyMatch(s -> s.getUserProperties().get("userId").equals(messageDto.getReceiverId()));
-//
-//            if (userOnline) {
-//                broadcastToUser(messageDto.getReceiverId(), messageDto.getContent());
-//            } else {
-//                System.out.println("User with ID " + messageDto.getReceiverId() + " is not online. Saving message for later retrieval.");
-//            }
-//
-//            chatService.sendMessage(messageDto);
-//
-//            sessions.put(session.getId(), session);
-//        } catch (Exception e) {
-//            throw new RuntimeException(e.getMessage());
-//        }
-//    }
+    @OnMessage
+    public void sendMessage(String messageJson, Session session) {
+        try {
+            // Convert JSON to MessageDto
+            MessageDto messageDto = objectMapper.readValue(messageJson, MessageDto.class);
+
+            // Rest of your logic
+            User sender = userDao.findById(messageDto.getSenderId());
+            if (sender == null) {
+                session.close(new CloseReason(CloseReason.CloseCodes.CANNOT_ACCEPT, "User not found"));
+                return;
+            }
+
+            boolean userOnline = sessions.values().stream()
+                    .anyMatch(s -> s.getUserProperties().get("userId").equals(messageDto.getReceiverId()));
+
+            if (userOnline) {
+                broadcastToUser(messageDto.getReceiverId(), messageDto.getContent());
+            } else {
+                System.out.println("User with ID " + messageDto.getReceiverId() + " is not online. Saving message for later retrieval.");
+            }
+
+            chatService.sendMessage(messageDto);
+            sessions.put(session.getId(), session);
+
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to process message", e);
+        }
+    }
 
     @OnClose
     public void onClose(@PathParam("userId") Long id, Session session) {

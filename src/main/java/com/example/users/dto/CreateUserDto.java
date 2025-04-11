@@ -20,5 +20,8 @@ public class CreateUserDto {
     @Email
     private String email;
 
+    @NotBlank
+    private Long phone;
+
     private UserRole role = UserRole.USER;
 }

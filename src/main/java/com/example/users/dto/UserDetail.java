@@ -7,5 +7,6 @@ public class UserDetail {
     private Long id;
     private String username;
     private String email;
+    private Long phone;
     private UserRole role;
 }

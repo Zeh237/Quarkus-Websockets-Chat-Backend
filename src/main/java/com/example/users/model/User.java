@@ -1,6 +1,7 @@
 package com.example.users.model;
 import io.quarkus.hibernate.orm.panache.PanacheEntityBase;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import jakarta.validation.constraints.NotBlank;
@@ -44,6 +45,10 @@ public class User extends PanacheEntityBase {
     @CreationTimestamp
     @Column(name = "created_at")
     private LocalDateTime createdAt;
+
+    @NotNull
+    @Column(name="phone")
+    private Long phone;
 
     @UpdateTimestamp
     @Column(name = "updated_at")
