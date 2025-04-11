@@ -39,4 +39,15 @@ public class MessageDao implements PanacheRepository<Message> {
     }
 
 
+    public List<Message> findByReceiverIdAndIsRead(Long userId, boolean b, int page, int size) {
+        return Message.find("receiver.id = ?1 and read = ?2", userId, b)
+                .page(Page.of(page, size))
+                .list();
+    }
+
+    public List<Message> findBySenderId(Long senderId, int page, int size) {
+        return Message.find("sender.id", senderId)
+                .page(Page.of(page, size))
+                .list();
+    }
 }
