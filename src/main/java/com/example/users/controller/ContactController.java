@@ -79,7 +79,7 @@ public class ContactController {
         return Response.ok().build();
     }
 
-    @GET
+    @POST
     @Path("/bulk")
     @RolesAllowed({"USER", "ADMIN"})
     public Response bulkImportContacts(List<ContactDto> contacts) {

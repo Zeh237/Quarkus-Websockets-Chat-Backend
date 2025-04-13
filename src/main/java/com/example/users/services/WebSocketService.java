@@ -2,8 +2,10 @@ package com.example.users.services;
 
 import com.example.users.dao.UserDao;
 import com.example.users.model.User;
+import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.websocket.*;
 import jakarta.websocket.server.ServerEndpoint;
 import jakarta.websocket.server.PathParam;
@@ -11,18 +13,20 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@ServerEndpoint("/ws/{id}")
+@ServerEndpoint("/ws/{userId}")
 @ApplicationScoped
 public class WebSocketService {
 
     @Inject
     private UserDao userDao;
 
-    Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private final Map<Long, Session> userSessions = new ConcurrentHashMap<>();
+
+    private final Map<Long, LocalDateTime> lastSeenCache = new ConcurrentHashMap<>();
 
     private void broadcast(String message) {
-        sessions.values().forEach(s -> {
-            s.getAsyncRemote().sendObject(message, result ->  {
+        userSessions.values().forEach(s -> {
+            s.getAsyncRemote().sendObject(message, result -> {
                 if (result.getException() != null) {
                     System.out.println("Unable to send message: " + result.getException());
                 }
@@ -31,52 +35,44 @@ public class WebSocketService {
     }
 
     @OnOpen
-    public void onOpen(@PathParam("id") Long id, Session session) {
-        User user = userDao.findById(id);
-        if (user == null) {
-            try {
-                session.close(new CloseReason(CloseReason.CloseCodes.CANNOT_ACCEPT, "User not found"));
-            } catch (Exception e) {
-                throw new RuntimeException(e.getMessage());
-            }
-            return;
-        }
-
-        broadcast("Online");
-        sessions.put(session.getId(), session);
+    public void onOpen(@PathParam("userId") Long userId, Session session) {
+        userSessions.put(userId, session);
+        lastSeenCache.remove(userId);
+        broadcast("User " + userId + " is online");
     }
 
     @OnClose
-    public void onClose(@PathParam("id") Long id, Session session) {
-        User user = userDao.findById(id);
-        if (user != null) {
-            user.setLastSeen(LocalDateTime.now());
-            userDao.persist(user);
-        }
-        sessions.remove(session.getId());
-        broadcast(user.getLastSeen().toString());
+    public void onClose(@PathParam("userId") Long userId, Session session) {
+        updateLastSeen(userId);
+        userSessions.remove(userId);
+        broadcast("User " + userId + " went offline");
     }
 
     @OnError
-    public void handleError(@PathParam("id") Long id, Session session, Throwable throwable) {
-        User user = userDao.findById(id);
-        if (user != null) {
-            user.setLastSeen(LocalDateTime.now());
-            userDao.persist(user);
-        }
-        sessions.remove(session.getId());
-        System.out.println("WebSocket Error: " + throwable.getMessage());
+    public void handleError(@PathParam("userId") Long userId, Session session, Throwable throwable) {
+        updateLastSeen(userId);
+        userSessions.remove(userId);
+        System.out.println("WebSocket error for user " + userId + ": " + throwable.getMessage());
     }
 
-    public boolean isUserOnline(Long id) {
-        return sessions.values().stream().anyMatch(session -> {
-            User user = userDao.findById(id);
-            if (user == null) {
-                return false;
+    private void updateLastSeen(Long userId) {
+        lastSeenCache.put(userId, LocalDateTime.now());
+    }
+
+    @Scheduled(every = "5s")
+    @Transactional
+    public void persistLastSeen() {
+        lastSeenCache.forEach((userId, timestamp) -> {
+            User user = userDao.findById(userId);
+            if (user != null) {
+                user.setLastSeen(timestamp);
+                userDao.persist(user);
             }
-            return session.getId().equals(sessions.get(session.getId()).getId());
         });
+        lastSeenCache.clear();
     }
 
-
+    public boolean isUserOnline(Long userId) {
+        return userSessions.containsKey(userId);
+    }
 }
