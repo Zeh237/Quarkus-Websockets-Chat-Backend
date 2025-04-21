@@ -33,7 +33,7 @@ public class ChatService {
     @Inject
     private MessageMapper messageMapper;
 
-    public void sendMessage(MessageDto dto) {
+    public MessageDto sendMessage(MessageDto dto) {
         try {
             if (dto.getContent() == null) {
                 throw new IllegalArgumentException("Message content cannot be null");
@@ -56,10 +56,19 @@ public class ChatService {
 
                 Message message = messageMapper.toEntity(dto);
                 messageDao.persist(message);
+                dto.setId(message.getId());
+                dto.setChatId(chat.getId());
+                dto.setCreatedAt(message.getCreatedAt());
+                dto.setChatId(message.getId());
+                return dto;
             } else {
                 dto.setChatId(chat.getId());
                 Message message = messageMapper.toEntity(dto);
                 messageDao.persist(message);
+                dto.setId(message.getId());
+                dto.setChatId(chat.getId());
+                dto.setCreatedAt(message.getCreatedAt());
+                return dto;
             }
         } catch (Exception e) {
             throw new RuntimeException(e.getMessage());

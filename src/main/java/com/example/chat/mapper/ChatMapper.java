@@ -33,7 +33,7 @@ public class ChatMapper {
         chatDto.setSenderId(chat.getSender().getId());
         chatDto.setReceiverId(chat.getReceiver().getId());
         chatDto.setSender(userMapper.toDTO(chat.getSender()));
-        chatDto.setReceiver(userMapper.toDTO(chat.getSender()));
+        chatDto.setReceiver(userMapper.toDTO(chat.getReceiver()));
         chatDto.setLastMessage(messageMapper.toDTO(messageDao.latestMessage(chat.getId())));
         chatDto.setCreatedAt(chat.getCreatedAt());
         chatDto.setUpdatedAt(chat.getUpdatedAt());

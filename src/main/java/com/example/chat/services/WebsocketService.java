@@ -1,20 +1,22 @@
 package com.example.chat.services;
-
-import com.example.chat.dao.ChatDao;
-import com.example.chat.dao.MessageDao;
 import com.example.chat.dto.MessageDto;
 import com.example.users.dao.UserDao;
 import com.example.users.model.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quarkus.scheduler.Scheduled;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import jakarta.transaction.Transactional;
 import jakarta.websocket.*;
 import jakarta.websocket.server.PathParam;
 import jakarta.websocket.server.ServerEndpoint;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static io.quarkus.arc.impl.UncaughtExceptions.LOGGER;
 
 @ServerEndpoint("/wsm/{userId}")
 @ApplicationScoped
@@ -23,117 +25,89 @@ public class WebsocketService {
     @Inject
     private UserDao userDao;
 
-    @Inject
-    private MessageDao messageDao;
+    private final Map<Long, Session> userSessions = new ConcurrentHashMap<>();
 
-    @Inject
-    private ChatDao chatDao;
+    private final Map<Long, LocalDateTime> lastSeenCache = new ConcurrentHashMap<>();
 
-    @Inject
-    private ChatService chatService;
-
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    Map<String, Session> sessions = new ConcurrentHashMap<>();
-
-    public void broadcastToUser(Long userId, String message) {
-        boolean userOnline = sessions.values().stream()
-                .anyMatch(session -> session.getUserProperties().get("userId").equals(userId));
-
-        if (!userOnline) {
-            System.out.println("User with ID " + userId + " is not online. Message not sent.");
-            return;
-        }
-
-        sessions.values().stream()
-                .filter(session -> session.getUserProperties().get("userId").equals(userId))
-                .forEach(s -> {
-                    s.getAsyncRemote().sendObject(message, result -> {
-                        if (result.getException() != null) {
-                            System.out.println("Unable to send message: " + result.getException());
-                        }
-                    });
-                });
-    }
-
-    @OnOpen
-    public void onOpen(@PathParam("userId") Long id, Session session) {
-        User user = userDao.findById(id);
-        if (user == null) {
-            try {
-                session.close(new CloseReason(CloseReason.CloseCodes.CANNOT_ACCEPT, "User not found"));
-            } catch (Exception e) {
-                throw new RuntimeException(e.getMessage());
-            }
-            return;
-        }
-
-        session.getUserProperties().put("userId", id);
-        sessions.put(session.getId(), session);
-        broadcastToUser(user.getId(), "User " + user.getUsername() + " has connected.");
-    }
-
-    @OnMessage
-    public void sendMessage(String messageJson, Session session) {
-        try {
-            // Convert JSON to MessageDto
-            MessageDto messageDto = objectMapper.readValue(messageJson, MessageDto.class);
-
-            // Rest of your logic
-            User sender = userDao.findById(messageDto.getSenderId());
-            if (sender == null) {
-                session.close(new CloseReason(CloseReason.CloseCodes.CANNOT_ACCEPT, "User not found"));
-                return;
-            }
-
-            boolean userOnline = sessions.values().stream()
-                    .anyMatch(s -> s.getUserProperties().get("userId").equals(messageDto.getReceiverId()));
-
-            if (userOnline) {
-                broadcastToUser(messageDto.getReceiverId(), messageDto.getContent());
-            } else {
-                System.out.println("User with ID " + messageDto.getReceiverId() + " is not online. Saving message for later retrieval.");
-            }
-
-            chatService.sendMessage(messageDto);
-            sessions.put(session.getId(), session);
-
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to process message", e);
-        }
-    }
-
-    @OnClose
-    public void onClose(@PathParam("userId") Long id, Session session) {
-        User user = userDao.findById(id);
-        if (user != null) {
-            user.setLastSeen(LocalDateTime.now());
-            userDao.persist(user);
-        }
-        sessions.remove(session.getId());
-        broadcastToUser(user.getId(), "User " + user.getUsername() + " has disconnected.");
-    }
-
-    @OnError
-    public void handleError(@PathParam("userId") Long id, Session session, Throwable throwable) {
-        User user = userDao.findById(id);
-        if (user != null) {
-            user.setLastSeen(LocalDateTime.now());
-            userDao.persist(user);
-        }
-        sessions.remove(session.getId());
-        System.out.println("WebSocket Error: " + throwable.getMessage());
-    }
-
-    public boolean isUserOnline(Long id) {
-        return sessions.values().stream().anyMatch(session -> {
-            User user = userDao.findById(id);
-            if (user == null) {
-                return false;
-            }
-            return session.getUserProperties().get("userId").equals(user.getId());
+    private void broadcast(String message) {
+        userSessions.values().forEach(s -> {
+            s.getAsyncRemote().sendObject(message, result -> {
+                if (result.getException() != null) {
+                    System.out.println("Unable to send message: " + result.getException());
+                }
+            });
         });
     }
 
+    @OnOpen
+    public void onOpen(@PathParam("userId") Long userId, Session session) {
+        userSessions.put(userId, session);
+        lastSeenCache.remove(userId);
+        broadcast("User " + userId + " is online");
+    }
 
+    @OnClose
+    public void onClose(@PathParam("userId") Long userId, Session session) {
+        updateLastSeen(userId);
+        userSessions.remove(userId);
+        broadcast("User " + userId + " went offline");
+    }
+
+    @OnError
+    public void handleError(@PathParam("userId") Long userId, Session session, Throwable throwable) {
+        updateLastSeen(userId);
+        userSessions.remove(userId);
+        System.out.println("WebSocket error for user " + userId + ": " + throwable.getMessage());
+    }
+
+    private void updateLastSeen(Long userId) {
+        lastSeenCache.put(userId, LocalDateTime.now());
+    }
+
+    @Scheduled(every = "5s")
+    @Transactional
+    public void persistLastSeen() {
+        lastSeenCache.forEach((userId, timestamp) -> {
+            User user = userDao.findById(userId);
+            if (user != null) {
+                user.setLastSeen(timestamp);
+                userDao.persist(user);
+            }
+        });
+        lastSeenCache.clear();
+    }
+
+    public boolean isUserOnline(Long userId) {
+        return userSessions.containsKey(userId);
+    }
+
+    public void sendMessageToUser(Long userId, MessageDto messageDto) {
+        try {
+            Session session = userSessions.get(userId);
+            if (session != null && session.isOpen()) {
+                // Create a lightweight map with only the needed fields
+                Map<String, Object> messagePayload = new HashMap<>();
+                messagePayload.put("id", messageDto.getId());
+                messagePayload.put("content", messageDto.getContent());
+                messagePayload.put("senderId", messageDto.getSenderId());
+                messagePayload.put("receiverId", messageDto.getReceiverId());
+                messagePayload.put("chatId", messageDto.getChatId());
+                // Convert LocalDateTime to ISO-8601 string format
+                messagePayload.put("createdAt", messageDto.getCreatedAt() != null
+                        ? messageDto.getCreatedAt().toString()
+                        : null);
+
+                ObjectMapper mapper = new ObjectMapper();
+                String jsonMessage = mapper.writeValueAsString(messagePayload);
+
+                session.getAsyncRemote().sendText(jsonMessage, result -> {
+                    if (result.getException() != null) {
+                        LOGGER.error("Failed to send WebSocket message", result.getException());
+                    }
+                });
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error sending WebSocket message", e);
+        }
+    }
 }
