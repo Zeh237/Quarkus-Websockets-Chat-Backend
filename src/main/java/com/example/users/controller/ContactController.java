@@ -12,7 +12,6 @@ import jakarta.ws.rs.core.Response;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Path("/contacts")
 public class ContactController {

@@ -1,6 +1,5 @@
 package com.example.chat.mapper;
 
-import com.example.chat.dao.ChatDao;
 import com.example.chat.dao.MessageDao;
 import com.example.chat.dto.ChatDto;
 import com.example.chat.model.Chat;

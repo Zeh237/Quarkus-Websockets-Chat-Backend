@@ -1,6 +1,4 @@
 package com.example.chat.dao;
-
-import com.example.chat.dto.MessageDto;
 import com.example.chat.model.Chat;
 import io.quarkus.hibernate.orm.panache.PanacheRepository;
 import jakarta.enterprise.context.ApplicationScoped;

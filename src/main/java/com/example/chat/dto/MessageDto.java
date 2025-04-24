@@ -1,6 +1,4 @@
 package com.example.chat.dto;
-
-import com.example.users.model.User;
 import lombok.Data;
 
 import java.time.LocalDateTime;

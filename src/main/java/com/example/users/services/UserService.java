@@ -17,7 +17,6 @@ import jakarta.transaction.Transactional;
 import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.NotFoundException;
 import jakarta.ws.rs.WebApplicationException;
-import jakarta.ws.rs.core.Response;
 
 import java.time.LocalDateTime;
 import java.util.List;
